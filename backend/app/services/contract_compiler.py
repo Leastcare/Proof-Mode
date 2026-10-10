@@ -10,7 +10,7 @@ Rules:
 - Ambiguities must be surfaced rather than guessed.
 - The LLM may NOT issue pass/fail verdicts.
 
-Falls back to a rule-based heuristic compiler if no OpenAI key is configured.
+Priority: Groq (free) → OpenAI → heuristic fallback.
 """
 from __future__ import annotations
 
@@ -79,12 +79,32 @@ OUTPUT FORMAT (strict JSON, no markdown):
 """.strip()
 
 
-# ── LLM-based compiler ────────────────────────────────────────────────────────
+# ── Groq compiler (primary — free tier) ──────────────────────────────────────
 
-async def compile_with_llm(
-    instruction: str,
-    columns:     list[str],
-) -> Contract:
+async def compile_with_groq(instruction: str, columns: list[str]) -> Contract:
+    from groq import AsyncGroq
+
+    client = AsyncGroq(api_key=settings.groq_api_key)
+    col_hint = f"Available columns: {', '.join(columns)}" if columns else ""
+    user_msg = f"Instruction: {instruction}\n{col_hint}"
+
+    response = await client.chat.completions.create(
+        model=settings.groq_model,
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user",   "content": user_msg},
+        ],
+        temperature=0,
+        max_tokens=1200,
+        response_format={"type": "json_object"},
+    )
+    raw = response.choices[0].message.content or "{}"
+    return _parse_compiler_output(raw, instruction)
+
+
+# ── OpenAI compiler (fallback) ────────────────────────────────────────────────
+
+async def compile_with_llm(instruction: str, columns: list[str]) -> Contract:
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -101,7 +121,6 @@ async def compile_with_llm(
         max_tokens=1200,
         response_format={"type": "json_object"},
     )
-
     raw = response.choices[0].message.content or "{}"
     return _parse_compiler_output(raw, instruction)
 
@@ -325,11 +344,18 @@ def _parse_compiler_output(raw: str, instruction: str) -> Contract:
 async def compile_contract(instruction: str, columns: list[str]) -> Contract:
     """
     Compile an instruction into a contract.
-    Uses LLM if OpenAI key is set, otherwise falls back to heuristic compiler.
+    Priority: Groq (free) → OpenAI → heuristic fallback.
     """
+    if settings.groq_api_key:
+        try:
+            return await compile_with_groq(instruction, columns)
+        except Exception:
+            pass   # fall through to OpenAI
+
     if settings.openai_api_key:
         try:
             return await compile_with_llm(instruction, columns)
         except Exception:
-            pass  # fall through to heuristic
+            pass   # fall through to heuristic
+
     return compile_heuristic(instruction, columns)

@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react'
 import { motion } from 'motion/react'
 import { WizardHeader } from '../components/layout/WizardHeader'
 import { useApp } from '../lib/AppContext'
-import { compileContract } from '../lib/api'
+import { compileContract, previewColumns } from '../lib/api'
 import { DEMO_INSTRUCTION, MOCK_CONTRACT } from '../lib/mockData'
 import { cn } from '../lib/utils'
 
@@ -99,8 +99,21 @@ export function UploadPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [usedDemo, setUsedDemo] = useState(false)
+  const [columnPreview, setColumnPreview] = useState<string[] | null>(null)
 
   const canContinue = originalFile && transformedFile && instruction.trim().length > 10
+
+  const handleOriginalFile = async (f: File) => {
+    setOriginalFile(f)
+    setColumnPreview(null)
+    // Fetch column preview from backend
+    try {
+      const preview = await previewColumns(f)
+      setColumnPreview(preview.columns ?? [])
+    } catch {
+      // If backend isn't running, skip preview silently
+    }
+  }
 
   const handleContinue = async () => {
     if (!canContinue) return
@@ -167,11 +180,13 @@ export function UploadPage() {
               label="ORIGINAL DATASET"
               sublabel="The file before AI transformation"
               file={originalFile}
-              onFile={setOriginalFile}
+              onFile={handleOriginalFile}
             />
             {originalFile && (
               <div className="mt-2 font-mono text-micro text-dim">
-                10,000 rows · 24 columns
+                {columnPreview
+                  ? `${columnPreview.length} columns: ${columnPreview.slice(0, 5).join(', ')}${columnPreview.length > 5 ? '…' : ''}`
+                  : '10,000 rows · 24 columns'}
               </div>
             )}
           </div>

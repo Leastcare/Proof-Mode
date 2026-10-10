@@ -1,7 +1,11 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import {
+  createContext, useContext, useState, useCallback,
+  useEffect, type ReactNode,
+} from 'react'
 import type { FlowState, FlowStep } from '../types/verification'
 import type { Contract } from '../types/contract'
 import type { VerificationResponse } from '../types/verification'
+import { saveSession, loadSession, clearSession } from './sessionStorage'
 
 interface AppContextValue extends FlowState {
   setStep: (step: FlowStep) => void
@@ -15,6 +19,9 @@ interface AppContextValue extends FlowState {
   setEvidenceIndex: (index: number) => void
   setIsDemoMode: (demo: boolean) => void
   reset: () => void
+  hasSavedSession: boolean
+  restoreSession: () => void
+  dismissSavedSession: () => void
 }
 
 const defaultState: FlowState = {
@@ -34,6 +41,49 @@ const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<FlowState>(defaultState)
+  const [hasSavedSession, setHasSavedSession] = useState(false)
+  const [pendingSession, setPendingSession] = useState<ReturnType<typeof loadSession>>(null)
+
+  // Check for saved session on mount
+  useEffect(() => {
+    const saved = loadSession()
+    if (saved) {
+      setHasSavedSession(true)
+      setPendingSession(saved)
+    }
+  }, [])
+
+  // Auto-save state changes (skip file objects — not serialisable)
+  useEffect(() => {
+    if (state.step === 'landing') return
+    saveSession({
+      step: state.step,
+      instruction: state.instruction,
+      contract: state.contract,
+      verificationResult: state.verificationResult,
+      evidenceIndex: state.evidenceIndex,
+    })
+  }, [state.step, state.instruction, state.contract, state.verificationResult, state.evidenceIndex])
+
+  const restoreSession = useCallback(() => {
+    if (!pendingSession) return
+    setState(s => ({
+      ...s,
+      step: pendingSession.step as FlowStep,
+      instruction: pendingSession.instruction ?? '',
+      contract: (pendingSession.contract as Contract) ?? null,
+      verificationResult: (pendingSession.verificationResult as VerificationResponse) ?? null,
+      evidenceIndex: pendingSession.evidenceIndex ?? 0,
+    }))
+    setHasSavedSession(false)
+    setPendingSession(null)
+  }, [pendingSession])
+
+  const dismissSavedSession = useCallback(() => {
+    clearSession()
+    setHasSavedSession(false)
+    setPendingSession(null)
+  }, [])
 
   const setStep = useCallback((step: FlowStep) => setState(s => ({ ...s, step })), [])
   const setOriginalFile = useCallback((originalFile: File | null) => setState(s => ({ ...s, originalFile })), [])
@@ -45,7 +95,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setSelectedEvidenceId = useCallback((selectedEvidenceId: string | null) => setState(s => ({ ...s, selectedEvidenceId })), [])
   const setEvidenceIndex = useCallback((evidenceIndex: number) => setState(s => ({ ...s, evidenceIndex })), [])
   const setIsDemoMode = useCallback((isDemoMode: boolean) => setState(s => ({ ...s, isDemoMode })), [])
-  const reset = useCallback(() => setState(defaultState), [])
+
+  const reset = useCallback(() => {
+    clearSession()
+    setState(defaultState)
+  }, [])
 
   return (
     <AppContext.Provider value={{
@@ -61,6 +115,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setEvidenceIndex,
       setIsDemoMode,
       reset,
+      hasSavedSession,
+      restoreSession,
+      dismissSavedSession,
     }}>
       {children}
     </AppContext.Provider>

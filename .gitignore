@@ -12,6 +12,7 @@ venv/
 env/
 *.env
 !.env.example
+backend/.env
 
 # Node
 node_modules/

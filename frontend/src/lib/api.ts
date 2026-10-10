@@ -19,6 +19,13 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 // ── API calls ─────────────────────────────────────────────────────────────────
 
+export async function previewColumns(file: File): Promise<{ columns: string[]; size_bytes: number }> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASE_URL}/preview-columns`, { method: 'POST', body: form })
+  return handleResponse<{ columns: string[]; size_bytes: number }>(res)
+}
+
 export async function compileContract(
   instruction: string,
   originalFile?: File | null,

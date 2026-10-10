@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useApp } from '../lib/AppContext'
-
 const STEP_LABELS = ['UPLOAD', 'SET CONTRACT', 'VERIFY', 'REVIEW & FIX']
 
 // Drifting evidence IDs with positions
@@ -79,11 +78,42 @@ function FilmModal({ onClose }: { onClose: () => void }) {
 }
 
 export function LandingPage() {
-  const { setStep } = useApp()
+  const { setStep, hasSavedSession, restoreSession, dismissSavedSession } = useApp()
   const [showFilm, setShowFilm] = useState(false)
 
   return (
     <div className="relative bg-void overflow-x-hidden">
+      {/* Session recovery banner */}
+      <AnimatePresence>
+        {hasSavedSession && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-16 left-0 right-0 z-40 flex justify-center px-8 pt-3"
+          >
+            <div className="flex items-center gap-4 bg-surface border border-muted/40 px-5 py-3 max-w-lg w-full">
+              <div className="flex-1">
+                <div className="font-mono text-micro text-muted uppercase tracking-widest mb-0.5">PREVIOUS SESSION</div>
+                <div className="font-sans text-label text-soft-white">You have an unfinished verification.</div>
+              </div>
+              <button
+                onClick={restoreSession}
+                className="font-sans text-label text-bone border border-ghost px-3 py-1.5 hover:border-muted transition-colors shrink-0"
+              >
+                Resume →
+              </button>
+              <button
+                onClick={dismissSavedSession}
+                className="font-mono text-label text-dim hover:text-muted transition-colors shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── Fixed header ── */}
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-5">
         <span className="font-sans text-label font-medium text-bone tracking-widest uppercase">ProofMode</span>
